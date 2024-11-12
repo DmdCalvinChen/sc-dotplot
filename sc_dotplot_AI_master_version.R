@@ -27,10 +27,10 @@ input_location <- file.path("data", "Ref_Gene_location.txt")
 input_data <- file.path("data", "merged_ref_data.csv")
 
 proper_cell_names <- c(
-  "B cell", "capillary endothelial cell", "conventional dendritic cell", "endothelial cell of artery", "endothelial cell of lymphatic vessel",
-  "endothelial cell of venule", "fibroblast", "gamma-delta T cell", "helper T cell", "keratinocyte", "Langerhans cell", "macrophage", "mast cell",
-  "mature NK T cell", "melanocyte", "mucosal invariant T cell", "natural killer cell", "neutrophil", "pericyte", "plasma cell",
-  "plasmacytoid dendritic cell", "regulatory T cell", "Schwann cell", "T-helper 17 cell", "T cell", "vascular associated smooth muscle cell"
+  "B cell", "conventional dendritic cell",
+  "gamma-delta T cell", "helper T cell", "Langerhans cell", "macrophage", "mast cell",
+  "mature NK T cell", "mucosal invariant T cell", "natural killer cell", "neutrophil", "pericyte", "plasma cell",
+  "plasmacytoid dendritic cell", "regulatory T cell", "T-helper 17 cell", "T cell"
 )
 
 # proper_cell_names主要是应位有些名字比如CD4+会报错，其二是这个变量决定了最后绘制图的细胞类型
@@ -180,13 +180,10 @@ p2 <- left_join(res, p2, by = c("cell_type", "gene"))
 
 
 
-
-
 generate_plots <- function(p1, p2, threshold, title, output_file) {
   # 将NA值设为0，但不显示它们
   p1_filtered <- p1[!(p1$pct == 0 | is.na(p1$pct)), ]
   p2_filtered <- p2[!(p2$pct == 0 | is.na(p2$pct)), ]
-
   # 根据阈值筛选数据
   if (threshold == 0) {
     p1_filtered <- p1_filtered[p1_filtered$stars != threshold, ]
@@ -195,7 +192,6 @@ generate_plots <- function(p1, p2, threshold, title, output_file) {
     p1_filtered <- p1_filtered[p1_filtered$stars == threshold, ]
     p2_filtered <- p2_filtered[p2_filtered$stars == threshold, ]
   }
-
   p <- ggplot() +
     geom_point(
       data = p1_filtered,
@@ -222,7 +218,7 @@ generate_plots <- function(p1, p2, threshold, title, output_file) {
       limits = c(0, 3.5),
       alpha = 0.6
     ) +
-    labs(title = title) +
+    labs(title = title, x = "Gene", y = "Cell Type") + # 这里添加了x轴标签
     theme(
       axis.text.x = element_text(angle = 45, hjust = 1),
       plot.background = element_rect(fill = "white", color = NA),
@@ -248,19 +244,14 @@ generate_plots <- function(p1, p2, threshold, title, output_file) {
       breaks = seq(10, 80, by = 10),
       limits = c(0, 100)
     )
-
   ggsave(output_file, plot = p, width = 12, height = 8)
 }
-
-
-
 
 # 生成不同阈值的图形
 generate_plots(p1, p2, threshold = 0, title = "normal vs periodontitis(P<0.05)", output_file = "2024_10_29_all.PDf")
 generate_plots(p1, p2, threshold = 3, title = "normal vs periodontitis(P<0.001)", output_file = "2024_10_29_3star.PDf")
 generate_plots(p1, p2, threshold = 2, title = "normal vs periodontitis(0.001<P<0.01)", output_file = "2024_10_29_2star.PDf")
 generate_plots(p1, p2, threshold = 1, title = "normal vs periodontitis(0.01<P<0.05)", output_file = "2024_10_29_1star.PDf")
-
 
 
 
