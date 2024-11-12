@@ -29,7 +29,7 @@ input_data <- file.path("data", "merged_ref_data.csv")
 proper_cell_names <- c(
   "B cell", "conventional dendritic cell",
   "gamma-delta T cell", "helper T cell", "Langerhans cell", "macrophage", "mast cell",
-  "mature NK T cell", "mucosal invariant T cell", "natural killer cell", "neutrophil", "pericyte", "plasma cell",
+  "mature NK T cell", "mucosal invariant T cell", "natural killer cell", "neutrophil", "plasma cell",
   "plasmacytoid dendritic cell", "regulatory T cell", "T-helper 17 cell", "T cell"
 )
 
@@ -519,5 +519,269 @@ result_1star <- generate_heatmap_filtered(
   threshold = 1,
   title = "Expression Changes (0.01<P<0.05)",
   output_file = "heatmap_1star.PDF"
+)
+
+
+
+
+
+
+
+
+generate_cell_proportion <- function(input_data, output_file) {
+  # 读取数据，只选择需要的列
+  data <- fread(input_data, select = c("cell_type", "disease"))
+
+  # 计算每个样本中各细胞类型的比例
+  cell_proportions <- data %>%
+    group_by(disease) %>%
+    count(cell_type) %>%
+    group_by(disease) %>%
+    mutate(proportion = n / sum(n) * 100) %>%
+    select(-n)
+
+  # 计算统计差异
+  stat_results <- purrr::map_df(proper_cell_names, function(cell) {
+    cell_data <- cell_proportions %>%
+      filter(cell_type == cell)
+
+    test_result <- wilcox.test(
+      proportion ~ disease,
+      data = cell_data
+    )
+
+    # 添加显著性标记
+    stars <- case_when(
+      test_result$p.value < 0.001 ~ "***",
+      test_result$p.value < 0.01 ~ "**",
+      test_result$p.value < 0.05 ~ "*",
+      TRUE ~ "ns"
+    )
+
+    data.frame(
+      cell_type = cell,
+      p_value = test_result$p.value,
+      significance = stars
+    )
+  })
+
+  # 创建箱型图
+  p <- ggplot(cell_proportions, aes(x = cell_type, y = proportion, fill = disease)) +
+    geom_boxplot(
+      position = position_dodge(width = 0.8),
+      width = 0.7,
+      outlier.shape = 21,
+      outlier.fill = "white"
+    ) +
+    scale_fill_manual(
+      values = c("normal" = "#4DBBD5", "periodontitis" = "#E64B35"),
+      name = "Group"
+    ) +
+    labs(
+      title = "Cell Type Proportions in Normal vs Periodontitis",
+      x = "Cell Type",
+      y = "Proportion (%)"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+      plot.title = element_text(hjust = 0.5),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor = element_blank(),
+      plot.margin = margin(5, 15, 5, 5)
+    ) +
+    # 添加显著性标记
+    geom_text(
+      data = stat_results,
+      aes(x = cell_type, y = max(cell_proportions$proportion) + 2, label = significance),
+      position = position_dodge(width = 0.8),
+      vjust = -0.5
+    )
+
+  # 保存图片
+  ggsave(output_file, plot = p, width = 15, height = 8, dpi = 300)
+}
+
+
+
+
+
+
+
+
+
+generate_cell_proportion <- function(input_data, output_file) {
+  # 加载必要的包
+  library(data.table)
+  library(dplyr)
+  library(ggplot2)
+  library(RColorBrewer)
+
+  # 读取数据，只选择需要的列
+  data <- fread(input_data, select = c("cell_type", "disease"))
+
+  # 计算每个样本中各细胞类型的比例
+  cell_proportions <- data %>%
+    group_by(disease) %>%
+    count(cell_type) %>%
+    group_by(disease) %>%
+    mutate(proportion = n / sum(n) * 100) %>%
+    select(-n)
+
+  # 创建堆叠柱状图
+  p <- ggplot(cell_proportions, aes(x = disease, y = proportion, fill = cell_type)) +
+    geom_bar(stat = "identity", position = "stack", width = 0.7) +
+    scale_fill_manual(
+      values = colorRampPalette(brewer.pal(8, "Set2"))(length(unique(cell_proportions$cell_type))),
+      name = "Cell Type"
+    ) +
+    labs(
+      title = "Cell Type Proportions in Normal vs Periodontitis",
+      x = "Group",
+      y = "Proportion (%)"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 0, hjust = 0.5),
+      plot.title = element_text(hjust = 0.5),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor = element_blank(),
+      legend.position = "right",
+      plot.margin = margin(5, 15, 5, 5)
+    )
+
+  # 保存图片
+  ggsave(output_file, plot = p, width = 10, height = 8, dpi = 300)
+
+  # 返回比例数据
+  return(cell_proportions)
+}
+
+# 生成细胞比例堆叠图
+generate_cell_proportion(
+  input_data = input_data,
+  output_file = "all-cell_proportion_stacked.pdf"
+)
+
+
+
+
+
+
+
+
+
+generate_immune_cell_proportion <- function(input_data, output_file, proper_cell_names) {
+  # 加载必要的包
+  library(data.table)
+  library(dplyr)
+  library(ggplot2)
+  library(RColorBrewer)
+  library(scales) # 用于颜色处理
+
+  #' 生成高对比度的颜色方案
+  #' @param n 需要的颜色数量
+  #' @return 返回n个高对比度的颜色
+  generate_distinct_colors <- function(n) {
+    # 使用多个调色板组合以获得足够的颜色
+    palettes <- list(
+      brewer.pal(8, "Set1"),
+      brewer.pal(8, "Set2"),
+      brewer.pal(8, "Set3"),
+      brewer.pal(8, "Dark2"),
+      brewer.pal(8, "Paired")
+    )
+
+    # 合并所有调色板
+    all_colors <- unique(unlist(palettes))
+
+    # 如果颜色不够，使用hue_pal生成额外的颜色
+    if (n > length(all_colors)) {
+      additional_colors <- hue_pal(h.start = 0, h.end = 360)(n - length(all_colors))
+      all_colors <- c(all_colors, additional_colors)
+    }
+
+    # 确保颜色的区分度
+    distinct_colors <- all_colors[1:n]
+
+    return(distinct_colors)
+  }
+
+  # 读取数据，只选择需要的列
+  data <- fread(input_data, select = c("cell_type", "disease"))
+
+  # 过滤出指定的免疫细胞类型
+  data_filtered <- data %>%
+    filter(cell_type %in% proper_cell_names)
+
+  # 计算免疫细胞的比例（以免疫细胞总数为基准）
+  immune_cell_proportions <- data_filtered %>%
+    group_by(disease) %>%
+    count(cell_type) %>%
+    group_by(disease) %>%
+    mutate(proportion = n / sum(n) * 100) %>%
+    select(-n)
+
+  # 确保所有细胞类型都在结果中，即使计数为0
+  all_combinations <- expand.grid(
+    cell_type = proper_cell_names,
+    disease = unique(data$disease)
+  ) %>%
+    as_tibble()
+
+  immune_cell_proportions <- all_combinations %>%
+    left_join(immune_cell_proportions, by = c("cell_type", "disease")) %>%
+    mutate(proportion = replace_na(proportion, 0))
+
+  # 生成所需数量的高对比度颜色
+  n_colors <- length(proper_cell_names)
+  plot_colors <- generate_distinct_colors(n_colors)
+
+  # 创建主题函数以提高代码复用性
+  create_custom_theme <- function(base_size = 12) {
+    theme_minimal() %+replace%
+      theme(
+        axis.text.x = element_text(angle = 0, hjust = 0.5, size = base_size),
+        axis.text.y = element_text(size = base_size),
+        axis.title = element_text(size = base_size + 2),
+        plot.title = element_text(hjust = 0.5, size = base_size + 4),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right",
+        legend.text = element_text(size = base_size - 2),
+        legend.title = element_text(size = base_size),
+        plot.margin = margin(5, 15, 5, 5)
+      )
+  }
+
+  # 创建堆叠柱状图
+  p <- ggplot(immune_cell_proportions, aes(x = disease, y = proportion, fill = cell_type)) +
+    geom_bar(stat = "identity", position = "stack", width = 0.7) +
+    scale_fill_manual(
+      values = plot_colors,
+      name = "Immune Cell Type"
+    ) +
+    labs(
+      title = "Immune Cell Type Proportions in Normal vs Periodontitis",
+      x = "Group",
+      y = "Proportion of Immune Cells (%)"
+    ) +
+    create_custom_theme()
+
+  # 保存图片
+  ggsave(output_file, plot = p, width = 12, height = 8, dpi = 300)
+
+  # 返回比例数据和使用的颜色映射
+  return(list(
+    proportions = immune_cell_proportions,
+    color_mapping = setNames(plot_colors, proper_cell_names)
+  ))
+}
+
+# 使用示例
+results <- generate_immune_cell_proportion(
+  input_data = input_data,
+  output_file = "immune_cell_proportion_stacked.pdf",
+  proper_cell_names = proper_cell_names
 )
 
