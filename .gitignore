@@ -1,0 +1,7 @@
+
+
+# Optionally, you can also ignore .Rhistory files
+*.Rhistory
+
+*merged_ref_data.csv
+*Ref_Gene_location.txt
